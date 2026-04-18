@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Парковка: Детальный счет</title>
+	<style>
+		:root { --primary: #2563eb; --success: #16a34a; --bg: #f1f5f9; }
+		body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; color: #1e293b; }
+		.card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 100%; max-width: 420px; }
+		h2 { text-align: center; margin-bottom: 20px; color: var(--primary); display: flex; justify-content: center; align-items: center; gap: 10px; }
+		
+		.live-badge { background: #fee2e2; color: #dc2626; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; animation: blink 1.5s infinite; }
+		@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+		.tariff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+		.t-item { background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.8rem; text-align: center; }
+		
+		.input-group { margin-bottom: 15px; }
+		label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #475569; }
+		input { width: 100%; padding: 12px; border: 2px solid #cbd5e1; border-radius: 10px; box-sizing: border-box; font-size: 1.1rem; font-family: inherit; }
+		
+		.result-box { margin-top: 20px; padding: 20px; border-radius: 12px; background: #fff; border: 2px solid #2563eb; text-align: center; position: relative; overflow: hidden; }
+		.result-box::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--primary); }
+		
+		.price-big { display: block; font-size: 3.2rem; font-weight: 900; color: #1e293b; margin: 10px 0; }
+		.duration-main { font-size: 1.1rem; font-weight: 600; color: #2563eb; }
+		.breakdown { background: #f1f5f9; padding: 10px; border-radius: 8px; font-size: 0.9rem; color: #475569; margin-top: 10px; border: 1px dashed #cbd5e1; }
+		
+		.btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; font-size: 1rem; }
+		.btn-now { background: var(--primary); color: white; margin-bottom: 15px; }
+		.btn-stop { background: #ef4444; color: white; }
+	</style>
+</head>
+<body>
+
+<div class="card">
+	<h2>🅿️ СЧЕТ <span class="live-badge">LIVE</span></h2>
+	
+	<div class="tariff-grid">
+		<div class="t-item">1ч: 30₴</div>
+		<div class="t-item">12ч: 200₴</div>
+		<div class="t-item">24ч: 250₴</div>
+		<div class="t-item">Льгота: +10м</div>
+	</div>
+
+	<div class="input-group">
+		<label>Время заезда:</label>
+		<input type="datetime-local" id="timeIn" onchange="calculate()">
+		<button class="btn btn-now" onclick="setNowIn()">Заехал сейчас</button>
+	</div>
+	
+	<div class="result-box">
+		<div class="duration-main" id="durationText">0ч 0мин</div>
+		<span class="price-big" id="priceDisplay">0 ₴</span>
+		
+		<div class="breakdown" id="breakdownDisplay">
+			Детализация тарифа появится после ввода времени
+		</div>
+	</div>
+
+	<button id="toggleBtn" class="btn btn-stop" onclick="toggleTimer()">Остановить время</button>
+</div>
+
+<script>
+let isRunning = true;
+
+function setNowIn() {
+	const now = new Date();
+	now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+	document.getElementById('timeIn').value = now.toISOString().slice(0,16);
+	calculate();
+}
+
+function calculate() {
+	const startStr = document.getElementById('timeIn').value;
+	if (!startStr) return;
+
+	const start = new Date(startStr);
+	const end = isRunning ? new Date() : new Date(); // Упростили для примера, берем текущее
+
+	if (end <= start) {
+		document.getElementById('priceDisplay').innerText = "0 ₴";
+		document.getElementById('durationText').innerText = "Ожидание...";
+		document.getElementById('breakdownDisplay').innerText = "Время выезда раньше заезда";
+		return;
+	}
+
+	const diffMs = end - start;
+	const totalMinutes = Math.floor(diffMs / (1000 * 60));
+	
+	// Льготный период 10 минут
+	let billableMinutes = totalMinutes - 10;
+	let totalHours = billableMinutes <= 0 ? 1 : Math.ceil(billableMinutes / 60);
+
+	const days = Math.floor(totalHours / 24);
+	const hours = totalHours % 24;
+
+	let price = days * 250;
+	let hourlyPart = 0;
+
+	if (hours > 0) {
+		if (hours <= 8) {
+			hourlyPart = hours * 30;
+		} else if (hours <= 12) {
+			hourlyPart = 200;
+		} else {
+			let extra = (hours - 12) * 30;
+			hourlyPart = Math.min(250, 200 + extra);
+		}
+	}
+	price += hourlyPart;
+
+	// Фактическое время (часы и минуты)
+	const factH = Math.floor(totalMinutes / 60);
+	const factM = totalMinutes % 60;
+
+	// Вывод
+	document.getElementById('durationText').innerText = `Время в пути: ${factH}ч ${factM}мин`;
+	document.getElementById('priceDisplay').innerText = price + " ₴";
+	
+	// Формируем текст детализации
+	let detailText = `<b>Тариф:</b> `;
+	if (days > 0) detailText += `${days} сут. `;
+	if (hours > 0) detailText += `${hours} ч. `;
+	if (days === 0 && hours === 0) detailText += `1 ч. (мин. ставка)`;
+	
+	detailText += `<br><small style="opacity:0.7">Оплачиваемых часов: ${totalHours}</small>`;
+	
+	document.getElementById('breakdownDisplay').innerHTML = detailText;
+}
+
+function toggleTimer() {
+	isRunning = !isRunning;
+	const btn = document.getElementById('toggleBtn');
+	btn.innerText = isRunning ? "Остановить время" : "Продолжить расчет";
+	btn.style.background = isRunning ? "#ef4444" : "#2563eb";
+}
+
+setInterval(() => {
+	if (isRunning) calculate();
+}, 1000);
+
+window.onload = function() {
+	const now = new Date();
+	now.setHours(now.getHours() - 1); 
+	now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+	document.getElementById('timeIn').value = now.toISOString().slice(0,16);
+};
+</script>
+
+</body>
+</html>
